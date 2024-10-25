@@ -1,53 +1,79 @@
+import pandas as pd
+import numpy as np
 import pickle
-import warnings
-warnings.filterwarnings("ignore") 
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.model_selection import train_test_split
 
-with open("/content/drive/MyDrive/ML PROJECT/SDG_classifier.pkl", "rb") as f:
-    MODEL = pickle.load(f)
+from sklearn.linear_model import SGDClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC
+from sklearn.naive_bayes import MultinomialNB
 
-with open("/content/drive/MyDrive/ML PROJECT/tfidf_vectorizer.pkl", "rb") as f:
-    TF_IDF = pickle.load(f)
+from sklearn.multiclass import OneVsRestClassifier
 
-with open("/content/drive/MyDrive/ML PROJECT/multilabel_binarizer.pkl", "rb") as f:
-    MULTILABEL = pickle.load(f)
+df = pd.read_excel("/content/drive/MyDrive/Group 6&7-Classification.xlsx")
+df.head()
 
-def predict_sdg(text_content):
-    X = TF_IDF.transform([text_content])
-    predictions = MODEL.predict(X)
-    predicted_labels = MULTILABEL.inverse_transform(predictions)
-    print(f"Predicted {len(predicted_labels[0])} SDGs out of 17 SGDs.")
-    return predicted_labels[0]
+df['SDG'] = df['SDG'].str.replace(', ', ',')
+df['SDG'] = df['SDG'].str.split(',')
+df.info()
 
-predicted_sdgs_SVC = predict_sdg(text_summ_SVC)
-predicted_sdgs_BERT = predict_sdg(text_summ_BERT)
+sdg_counts = [s for sdg in df['SDG'] for s in sdg]
+pd.Series(sdg_counts).value_counts()
 
-print("Cloq: ", predicted_sdgs_SVC)
-print("IndiaCityWalks: ", predicted_sdgs_BERT)
+type(df['SDG'].iloc[0])
+y = df['SDG']
+y
+
+multilabel = MultiLabelBinarizer()
+y = multilabel.fit_transform(df['SDG'])
+y
+
+multilabel.classes_
+
+pd.DataFrame(y, columns=multilabel.classes_)
+
+tfidf = TfidfVectorizer(analyzer='word', max_features=None)
+X = tfidf.fit_transform(df['Overview'])
+with open('tfidf_vectorizer.pkl', 'wb') as file:
+    pickle.dump(tfidf, file)
+X.shape, y.shape
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 42)
+
+sgd = SGDClassifier()
+lr = LogisticRegression(solver='lbfgs')
+svc = LinearSVC()
+nb = MultinomialNB()
+
+def j_score(y_true, y_pred):
+  jaccard = np.minimum(y_true, y_pred).sum(axis = 1)/np.maximum(y_true, y_pred).sum(axis = 1)
+  return jaccard.mean()*100
 
 
-import matplotlib.pyplot as plt
+def print_score(y_pred, clf):
+  print("Clf: ", clf.__class__.__name__)
+  print('Jacard score: {}'.format(j_score(y_test, y_pred)))
+  print('----')
 
-models = [
-    "Multinomial NB",
-    "Stochastic Gradient Descent",
-    "Logistic Regression",
-    "Linear SVC",
-]
-accuracies = [0.7642, 0.8579, 0.7299, 0.8538]
+  for classifier in [sgd, lr, svc, nb]:
+  clf = OneVsRestClassifier(classifier)
+  clf.fit(X_train, y_train)
+  y_pred = clf.predict(X_test)
+  print_score(y_pred, classifier)
 
-# Plotting the bar graph
-plt.figure(figsize=(10, 6))
-plt.bar(models, accuracies, color=['skyblue', 'lightgreen', 'coral', 'lightpink', 'gold'])
+best_clf = OneVsRestClassifier(LinearSVC())
+best_clf.fit(X_train, y_train)
 
-# Adding labels and title
-plt.xlabel("Machine Learning Models")
-plt.ylabel("Accuracy")
-plt.title("Accuracy Comparison of Different ML Models for SDG Classification")
+model_filename = 'SDG_classifier.pkl'
+with open(model_filename, 'wb') as file:
+    pickle.dump(best_clf, file)
 
-for i, v in enumerate(accuracies):
-    plt.text(i, v + 0.01, f"{v:.2f}", ha='center', va='bottom')
+multilabel_filename = 'multilabel_binarizer.pkl'
+with open(multilabel_filename, 'wb') as file:
+    pickle.dump(multilabel, file)
 
-plt.xticks(rotation=45, ha='right')
-plt.tight_layout()
-plt.show()
+xt = tfidf.transform([text])
+clf.predict(xt)
+multilabel.inverse_transform(clf.predict(xt))
