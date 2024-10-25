@@ -5,3 +5,9 @@ drive.mount('/content/drive')
 !pip install moviepy
 !pip install SpeechRecognition
 !pip install metadata_parser
+!pip install pandas
+!pip install skcit-learn
+!pip install trnasformers
+!pip install seaborn
+!pip install matplotlib
+
